@@ -50,8 +50,16 @@ export interface Connection {
    * Open a table in the database.
    *
    * @param name The name of the table.
+   */
+  openTable(name: string): Promise<Table>
+
+  /**
+   * Open a table in the database.
+   *
+   * @param name The name of the table.
    * @param embeddings An embedding function to use on this table
    */
+  openTable<T>(name: string, embeddings: EmbeddingFunction<T>): Promise<Table<T>>
   openTable<T>(name: string, embeddings?: EmbeddingFunction<T>): Promise<Table<T>>
 
   /**
@@ -60,9 +68,20 @@ export interface Connection {
    * @param {string} name - The name of the table.
    * @param data - Non-empty Array of Records to be inserted into the table
    * @param {WriteMode} mode - The write mode to use when creating the table.
-   * @param {EmbeddingFunction} embeddings - An embedding function to use on this table
    */
-  createTable<T>(name: string, data: Array<Record<string, unknown>>, mode?: WriteMode, embeddings?: EmbeddingFunction<T>): Promise<Table<T>>
+  createTable(name: string, data: Array<Record<string, unknown>>, mode?: WriteMode): Promise<Table>
+  createTable(name: string, data: Array<Record<string, unknown>>, mode: WriteMode): Promise<Table>
+
+  /**
+   * Creates a new Table and initialize it with new data.
+   *
+   * @param {string} name - The name of the table.
+   * @param data - Non-empty Array of Records to be inserted into the table
+   * @param {WriteMode} mode - The write mode to use when creating the table.
+   * @param embeddings - An embedding function to use on this table
+   */
+  createTable<T>(name: string, data: Array<Record<string, unknown>>, mode: WriteMode, embeddings: EmbeddingFunction<T>): Promise<Table<T>>
+  createTable<T>(name: string, data: Array<Record<string, unknown>>, mode: WriteMode, embeddings?: EmbeddingFunction<T>): Promise<Table<T>>
 
   createTableArrow(name: string, table: ArrowTable): Promise<Table>
 
