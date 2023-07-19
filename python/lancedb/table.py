@@ -74,7 +74,6 @@ class Table(ABC):
     Can append new data with [Table.add()][lancedb.table.Table.add].
 
     >>> table.add([{"vector": [0.5, 1.3], "b": 4}])
-    2
 
     Can query the table with [Table.search][lancedb.table.Table.search].
 
@@ -151,7 +150,7 @@ class Table(ABC):
         mode: str = "append",
         on_bad_vectors: str = "error",
         fill_value: float = 0.0,
-    ) -> int:
+    ):
         """Add more data to the [Table](Table).
 
         Parameters
@@ -167,10 +166,6 @@ class Table(ABC):
         fill_value: float, default 0.
             The value to use when filling vectors. Only used if on_bad_vectors="fill".
 
-        Returns
-        -------
-        int
-            The number of vectors in the table.
         """
         raise NotImplementedError
 
@@ -201,6 +196,51 @@ class Table(ABC):
     @abstractmethod
     def _execute_query(self, query: Query) -> pa.Table:
         pass
+
+    @abstractmethod
+    def delete(self, where: str):
+        """Delete rows from the table.
+
+        This can be used to delete a single row, many rows, all rows, or
+        sometimes no rows (if your predicate matches nothing).
+
+        Parameters
+        ----------
+        where: str
+            The SQL where clause to use when deleting rows. For example, 'x = 2'
+            or 'x IN (1, 2, 3)'. The filter must not be empty, or it will error.
+
+        Examples
+        --------
+        >>> import lancedb
+        >>> import pandas as pd
+        >>> data = pd.DataFrame({"x": [1, 2, 3], "vector": [[1, 2], [3, 4], [5, 6]]})
+        >>> db = lancedb.connect("./.lancedb")
+        >>> table = db.create_table("my_table", data)
+        >>> table.to_pandas()
+           x      vector
+        0  1  [1.0, 2.0]
+        1  2  [3.0, 4.0]
+        2  3  [5.0, 6.0]
+        >>> table.delete("x = 2")
+        >>> table.to_pandas()
+           x      vector
+        0  1  [1.0, 2.0]
+        1  3  [5.0, 6.0]
+
+        If you have a list of values to delete, you can combine them into a
+        stringified list and use the `IN` operator:
+
+        >>> to_remove = [1, 5]
+        >>> to_remove = ", ".join([str(v) for v in to_remove])
+        >>> to_remove
+        '1, 5'
+        >>> table.delete(f"x IN ({to_remove})")
+        >>> table.to_pandas()
+           x      vector
+        0  3  [5.0, 6.0]
+        """
+        raise NotImplementedError
 
 
 class LanceTable(Table):
@@ -262,7 +302,6 @@ class LanceTable(Table):
                vector    type
         0  [1.1, 0.9]  vector
         >>> table.add([{"vector": [0.5, 0.2], "type": "vector"}])
-        2
         >>> table.version
         2
         >>> table.checkout(1)
@@ -364,7 +403,7 @@ class LanceTable(Table):
         mode: str = "append",
         on_bad_vectors: str = "error",
         fill_value: float = 0.0,
-    ) -> int:
+    ):
         """Add data to the table.
 
         Parameters
@@ -391,7 +430,6 @@ class LanceTable(Table):
         )
         lance.write_dataset(data, self._dataset_uri, mode=mode)
         self._reset_dataset()
-        return len(self)
 
     def search(
         self, query: Union[VEC, str], vector_column_name=VECTOR_COLUMN_NAME
@@ -489,38 +527,15 @@ class LanceTable(Table):
     @classmethod
     def open(cls, db, name):
         tbl = cls(db, name)
-        if not os.path.exists(tbl._dataset_uri):
+        fs, path = pa.fs.FileSystem.from_uri(tbl._dataset_uri)
+        file_info = fs.get_file_info(path)
+        if file_info.type != pa.fs.FileType.Directory:
             raise FileNotFoundError(
                 f"Table {name} does not exist. Please first call db.create_table({name}, data)"
             )
         return tbl
 
     def delete(self, where: str):
-        """Delete rows from the table.
-
-        Parameters
-        ----------
-        where: str
-            The SQL where clause to use when deleting rows.
-
-        Examples
-        --------
-        >>> import lancedb
-        >>> import pandas as pd
-        >>> data = pd.DataFrame({"x": [1, 2, 3], "vector": [[1, 2], [3, 4], [5, 6]]})
-        >>> db = lancedb.connect("./.lancedb")
-        >>> table = db.create_table("my_table", data)
-        >>> table.to_pandas()
-           x      vector
-        0  1  [1.0, 2.0]
-        1  2  [3.0, 4.0]
-        2  3  [5.0, 6.0]
-        >>> table.delete("x = 2")
-        >>> table.to_pandas()
-           x      vector
-        0  1  [1.0, 2.0]
-        1  3  [5.0, 6.0]
-        """
         self._dataset.delete(where)
 
     def _execute_query(self, query: Query) -> pa.Table:

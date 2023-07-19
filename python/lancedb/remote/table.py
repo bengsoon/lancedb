@@ -79,7 +79,6 @@ class RemoteTable(Table):
                 content_type=ARROW_STREAM_CONTENT_TYPE,
             )
         )
-        return len(data)
 
     def search(
         self, query: Union[VEC, str], vector_column: str = VECTOR_COLUMN_NAME
@@ -89,3 +88,6 @@ class RemoteTable(Table):
     def _execute_query(self, query: Query) -> pa.Table:
         result = self._conn._client.query(self._name, query)
         return self._conn._loop.run_until_complete(result).to_arrow()
+
+    def delete(self, predicate: str):
+        raise NotImplementedError
