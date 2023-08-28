@@ -21,9 +21,9 @@ from typing import Optional
 import pyarrow as pa
 from pyarrow import fs
 
-from .common import DATA, URI
+from .common import DATA, URI, EMBEDDING_COLUMN_NAME_META
 from .pydantic import LanceModel
-from .table import LanceTable, Table
+from .table import LanceTable, Table, Union, Callable
 from .util import fs_from_uri, get_uri_location, get_uri_scheme
 
 
@@ -40,7 +40,7 @@ class DBConnection(ABC):
         self,
         name: str,
         data: Optional[DATA] = None,
-        schema: Optional[pa.Schema, LanceModel] = None,
+        schema: Optional[Union[pa.Schema, LanceModel]] = None,
         mode: str = "create",
         on_bad_vectors: str = "error",
         fill_value: float = 0.0,
@@ -285,10 +285,13 @@ class LanceDBConnection(DBConnection):
         self,
         name: str,
         data: Optional[DATA] = None,
-        schema: Optional[pa.Schema, LanceModel] = None,
+        schema: Optional[Union[pa.Schema, LanceModel]] = None,
         mode: str = "create",
         on_bad_vectors: str = "error",
         fill_value: float = 0.0,
+        embedding_function: Optional[Callable] = None,
+        embedding_column: Optional[str] = EMBEDDING_COLUMN_NAME_META,
+        embedding_function_kwargs: Optional[dict] = None,
     ) -> LanceTable:
         """Create a table in the database.
 
@@ -307,6 +310,9 @@ class LanceDBConnection(DBConnection):
             mode=mode,
             on_bad_vectors=on_bad_vectors,
             fill_value=fill_value,
+            embedding_function=embedding_function,
+            embedding_column=embedding_column,
+            embedding_function_kwargs=embedding_function_kwargs
         )
         return tbl
 

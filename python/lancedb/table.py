@@ -17,7 +17,7 @@ import inspect
 import os
 from abc import ABC, abstractmethod
 from functools import cached_property
-from typing import Iterable, List, Optional, Union
+from typing import Iterable, List, Optional, Union, Callable
 
 import lance
 import numpy as np
@@ -27,28 +27,35 @@ from lance import LanceDataset
 from lance.dataset import ReaderLike
 from lance.vector import vec_to_table
 
-from .common import DATA, VEC, VECTOR_COLUMN_NAME
+from .common import DATA, VEC, VECTOR_COLUMN_NAME, EMBEDDING_FUNCTION_META, EMBEDDING_COLUMN_NAME_META, EMBEDDING_FUNCTION_KWARGS_META
 from .pydantic import LanceModel
 from .query import LanceFtsQueryBuilder, LanceQueryBuilder, Query
-from .util import fs_from_uri, safe_import_pandas
+from .util import fs_from_uri, safe_import_pandas, encode_pickle_base64, decode_pickle_base64
+from .embeddings import with_embeddings
 
 pd = safe_import_pandas()
 
 
-def _sanitize_data(data, schema, on_bad_vectors, fill_value):
+def _sanitize_data(data, schema, on_bad_vectors, fill_value, embedding_function=None, embedding_column=None, embedding_function_kwargs=None):
+    if isinstance(data, pa.Table) and embedding_function:
+        data = with_embeddings(embedding_function, data, embedding_column, func_kwargs=embedding_function_kwargs)
     if isinstance(data, list):
         # convert to list of dict if data is a bunch of LanceModels
         if isinstance(data[0], LanceModel):
             schema = data[0].__class__.to_arrow_schema()
             data = [dict(d) for d in data]
         data = pa.Table.from_pylist(data)
+        if embedding_function:
+            data = with_embeddings(embedding_function, data, embedding_column, func_kwargs=embedding_function_kwargs)
         data = _sanitize_schema(
             data, schema=schema, on_bad_vectors=on_bad_vectors, fill_value=fill_value
         )
     if isinstance(data, dict):
-        data = vec_to_table(data)
+        data = vec_to_table(data) # special case handled in lance
     if pd is not None and isinstance(data, pd.DataFrame):
         data = pa.Table.from_pandas(data, preserve_index=False)
+        if embedding_function:
+            data = with_embeddings(embedding_function, data, embedding_column, func_kwargs=embedding_function_kwargs)
         data = _sanitize_schema(
             data, schema=schema, on_bad_vectors=on_bad_vectors, fill_value=fill_value
         )
@@ -499,9 +506,14 @@ class LanceTable(Table):
         int
             The number of vectors in the table.
         """
+        metadata = self.schema.metadata
+        embedding_function = decode_pickle_base64(metadata.get(EMBEDDING_FUNCTION_META))
+        embedding_column = metadata.get(EMBEDDING_COLUMN_NAME_META).decode()
+        embedding_function_kwargs = decode_pickle_base64(metadata.get(EMBEDDING_FUNCTION_KWARGS_META))
+
         # TODO: manage table listing and metadata separately
         data = _sanitize_data(
-            data, self.schema, on_bad_vectors=on_bad_vectors, fill_value=fill_value
+            data, self.schema, on_bad_vectors=on_bad_vectors, fill_value=fill_value, embedding_function=embedding_function, embedding_column=embedding_column, embedding_function_kwargs=embedding_function_kwargs
         )
         lance.write_dataset(data, self._dataset_uri, schema=self.schema, mode=mode)
         self._reset_dataset()
@@ -511,7 +523,7 @@ class LanceTable(Table):
         other_table: Union[LanceTable, ReaderLike],
         left_on: str,
         right_on: Optional[str] = None,
-        schema: Optional[pa.Schema, LanceModel] = None,
+        schema: Optional[Union[pa.Schema, LanceModel]] = None,
     ):
         """Merge another table into this table.
 
@@ -612,6 +624,9 @@ class LanceTable(Table):
         mode="create",
         on_bad_vectors: str = "error",
         fill_value: float = 0.0,
+        embedding_function: Optional[Callable] = None,
+        embedding_column: Optional[str] = EMBEDDING_COLUMN_NAME_META,
+        embedding_function_kwargs: Optional[dict] = None,
     ):
         """
         Create a new table.
@@ -649,18 +664,32 @@ class LanceTable(Table):
             One of "error", "drop", "fill".
         fill_value: float, default 0.
             The value to use when filling vectors. Only used if on_bad_vectors="fill".
+        embedding_function: Callable, default None
+            A function to use to generate embeddings for each row.
+            The function should take a single argument, a list in inputs, and return a list of embeddings.
+        embedding_column:  str, deault "text"
+            The column name for which to generate embeddings, default "text"
+        embedding_function_kwargs: dict, default None
+            Additional keyword arguments to pass to the embedding function.
         """
         tbl = LanceTable(db, name)
         if inspect.isclass(schema) and issubclass(schema, LanceModel):
             schema = schema.to_arrow_schema()
         if data is not None:
             data = _sanitize_data(
-                data, schema, on_bad_vectors=on_bad_vectors, fill_value=fill_value
+                data, schema, on_bad_vectors=on_bad_vectors, fill_value=fill_value, embedding_function=embedding_function, embedding_column=embedding_column, embedding_function_kwargs=embedding_function_kwargs
             )
         else:
             if schema is None:
                 raise ValueError("Either data or schema must be provided")
             data = pa.Table.from_pylist([], schema=schema)
+        if embedding_function:
+            (data, schema) = _append_metadata(
+                data, schema, {EMBEDDING_FUNCTION_META: encode_pickle_base64(embedding_function),
+                                EMBEDDING_COLUMN_NAME_META: embedding_column,
+                                EMBEDDING_FUNCTION_KWARGS_META: encode_pickle_base64(embedding_function_kwargs)
+                                }
+            )
         lance.write_dataset(data, tbl._dataset_uri, schema=schema, mode=mode)
         return LanceTable(db, name)
 
@@ -853,3 +882,12 @@ def _sanitize_nans(data, fill_value, on_bad_vectors, vec_arr, vector_column_name
         is_full = np.any(~is_value_nan.reshape(-1, vec_arr.type.list_size), axis=1)
         data = data.filter(is_full)
     return data
+
+def _append_metadata(data: pa.Table, schema: pa.Schema = None, metadata: dict = None):
+    if schema is not None:
+        current_meta = schema.metadata or {}
+        schema = schema.with_metadata({**current_meta, **metadata})
+    if data is not None:
+        current_meta = data.schema.metadata or {}
+        data = data.replace_schema_metadata({**current_meta, **metadata})
+    return data, schema

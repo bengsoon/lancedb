@@ -33,6 +33,7 @@ def with_embeddings(
     wrap_api: bool = True,
     show_progress: bool = False,
     batch_size: int = 1000,
+    func_kwargs: dict = None,
 ) -> pa.Table:
     """Add a vector column to a table using the given embedding function.
 
@@ -52,13 +53,14 @@ def with_embeddings(
         Whether to show a progress bar.
     batch_size : int, default 1000
         The number of row values to pass to each call of the embedding function.
-
+    func_kwargs : dict, default None
+        Keyword arguments to pass to the embedding function.
     Returns
     -------
     pa.Table
         The input table with a new column called "vector" containing the embeddings.
     """
-    func = EmbeddingFunction(func)
+    func = EmbeddingFunction(func, func_kwargs)
     if wrap_api:
         func = func.retry().rate_limit()
     func = func.batch_size(batch_size)
@@ -72,12 +74,13 @@ def with_embeddings(
 
 
 class EmbeddingFunction:
-    def __init__(self, func: Callable):
+    def __init__(self, func: Callable, func_kwargs: dict=None):
         self.func = func
         self.rate_limiter_kwargs = {}
         self.retry_kwargs = {}
         self._batch_size = None
         self._progress = False
+        self._func_kwargs = func_kwargs or {}
 
     def __call__(self, text):
         # Get the embedding with retry
@@ -85,12 +88,12 @@ class EmbeddingFunction:
 
             @retry(**self.retry_kwargs)
             def embed_func(c):
-                return self.func(c.tolist())
+                return self.func(c.tolist(), **self._func_kwargs)
 
         else:
 
             def embed_func(c):
-                return self.func(c.tolist())
+                return self.func(c.tolist(), **self._func_kwargs)
 
         if len(self.rate_limiter_kwargs) > 0:
             v = int(sys.version_info.minor)

@@ -25,6 +25,9 @@ VEC = Union[list, np.ndarray, pa.Array, pa.ChunkedArray]
 URI = Union[str, Path]
 VECTOR_COLUMN_NAME = "vector"
 
+EMBEDDING_COLUMN_NAME_META = "text".encode("utf-8")
+EMBEDDING_FUNCTION_META = "embedding_function".encode("utf-8")
+EMBEDDING_FUNCTION_KWARGS_META = "embedding_function_kwargs".encode("utf-8")
 
 class Credential(str):
     """Credential field"""

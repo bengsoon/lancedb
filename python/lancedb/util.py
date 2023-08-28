@@ -12,6 +12,8 @@
 #  limitations under the License.
 
 import os
+import base64
+import pickle
 from typing import Tuple
 from urllib.parse import urlparse
 
@@ -76,6 +78,11 @@ def fs_from_uri(uri: str) -> Tuple[pa_fs.FileSystem, str]:
 
     return pa_fs.FileSystem.from_uri(uri)
 
+def encode_pickle_base64(obj):
+    return base64.b64encode(pickle.dumps(obj))
+
+def decode_pickle_base64(obj):
+    return pickle.loads(base64.b64decode(obj))
 
 def safe_import_pandas():
     try:
