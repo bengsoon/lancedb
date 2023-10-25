@@ -22,7 +22,7 @@ import pydantic
 import pytest
 from pydantic import Field
 
-from lancedb.pydantic import PYDANTIC_VERSION, LanceModel, Vector, pydantic_to_schema
+from lancedb.pydantic import PYDANTIC_VERSION, LanceModel, Vector, pydantic_to_schema, EncodedImage, ImageURI
 
 
 @pytest.mark.skipif(
@@ -198,3 +198,18 @@ def test_lance_model():
 
     t = TestModel()
     assert t == TestModel(vec=[0.0] * 16, li=[1, 2, 3])
+
+
+def test_lance_model_with_lance_types():
+    class TestModel(LanceModel):
+        image: EncodedImage() = Field()
+        uri: ImageURI() = Field()
+        # TODO: tensor type?
+
+    # TODO
+    # schema = pydantic_to_schema(TestModel)
+    # assert schema == TestModel.to_arrow_schema()
+    # assert TestModel.field_names() == ["image", "uri"]
+    #
+    # t = TestModel()
+    # assert t == TestModel(vec=[0.0] * 16, li=[1, 2, 3], image=EncodedImageArray(), uri="https://lancedb.dev")
