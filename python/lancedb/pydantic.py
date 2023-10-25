@@ -193,8 +193,8 @@ def EncodedImage() -> Type[ImageMixin]:
         # For pydantic v1
         @classmethod
         def validate(cls, v):
-            if not isinstance(v, bytes):
-                raise TypeError("A bytes is needed")
+            # if not isinstance(v, bytes):
+            #     raise TypeError("A bytes is needed")
             return cls(v)
 
         if PYDANTIC_VERSION < (2, 0):
@@ -251,8 +251,8 @@ def ImageURI() -> Type[ImageMixin]:
         # For pydantic v1
         @classmethod
         def validate(cls, v):
-            if not isinstance(v, str):
-                raise TypeError("A str is needed")
+            # if not isinstance(v, str):
+            #     raise TypeError("A str is needed")
             return cls(v)
 
         if PYDANTIC_VERSION < (2, 0):
@@ -328,6 +328,9 @@ def _pydantic_to_arrow_type(field: pydantic.fields.FieldInfo) -> pa.DataType:
             return pa.struct(fields)
         elif issubclass(field.annotation, FixedSizeListMixin):
             return pa.list_(field.annotation.value_arrow_type(), field.annotation.dim())
+        elif issubclass(field.annotation, ImageMixin):
+            return field.annotation.value_arrow_type()
+
     return _py_type_to_arrow_type(field.annotation)
 
 
