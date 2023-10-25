@@ -22,7 +22,14 @@ import pydantic
 import pytest
 from pydantic import Field
 
-from lancedb.pydantic import PYDANTIC_VERSION, LanceModel, Vector, pydantic_to_schema, EncodedImage, ImageURI
+from lancedb.pydantic import (
+    PYDANTIC_VERSION,
+    LanceModel,
+    Vector,
+    pydantic_to_schema,
+    EncodedImage,
+    ImageURI,
+)
 
 
 @pytest.mark.skipif(

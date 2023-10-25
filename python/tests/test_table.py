@@ -76,16 +76,31 @@ def test_create_table(db):
             pa.FixedSizeListArray.from_arrays(pa.array([3.1, 4.1, 5.9, 26.5]), 2),
             pa.array(["foo", "bar"]),
             pa.array([10.0, 20.0]),
-            pa.ExtensionArray.from_storage(EncodedImageType(), pa.array([b"foo", b"bar"], pa.binary())),
-            pa.ExtensionArray.from_storage(ImageURIType(), pa.array(["/tmp/foo", "/tmp/bar"], pa.string())),
-
+            pa.ExtensionArray.from_storage(
+                EncodedImageType(), pa.array([b"foo", b"bar"], pa.binary())
+            ),
+            pa.ExtensionArray.from_storage(
+                ImageURIType(), pa.array(["/tmp/foo", "/tmp/bar"], pa.string())
+            ),
         ],
         schema=schema,
     )
     data = [
         [
-            {"vector": [3.1, 4.1], "item": "foo", "price": 10.0, "encoded_image": b"foo", "image_uris": "/tmp/foo"},
-            {"vector": [5.9, 26.5], "item": "bar", "price": 20.0, "encoded_image": b"bar", "image_uris": "/tmp/bar"},
+            {
+                "vector": [3.1, 4.1],
+                "item": "foo",
+                "price": 10.0,
+                "encoded_image": b"foo",
+                "image_uris": "/tmp/foo",
+            },
+            {
+                "vector": [5.9, 26.5],
+                "item": "bar",
+                "price": 20.0,
+                "encoded_image": b"bar",
+                "image_uris": "/tmp/bar",
+            },
         ]
     ]
     df = pd.DataFrame(data[0])
